@@ -27,16 +27,16 @@
 -define(PREFIX_XPATH, "//CommonPrefixes/Prefix/text()").
 -define(CHUNK_SIZE, 8 * 1024).
 
-%% Returns a list of all of the buckets owned by the authenticated sender 
+%% Returns a list of all of the buckets owned by the authenticated sender
 %% of the request.
 %%
-%% Spec: list_buckets() -> 
+%% Spec: list_buckets() ->
 %%       {ok, Buckets::[Name::string()]} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
 list_buckets() ->
     try genericRequest(get, "", "", [], [], [], <<>>) of
-	{ok, Headers, Body} -> 
+	{ok, Headers, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(binary_to_list(Body)),
 	    TextNodes       = xmerl_xpath:string("//Bucket/Name/text()", XmlDoc),
 	    BExtr = fun (#xmlText{value=T}) -> T end,
@@ -49,17 +49,17 @@ list_buckets() ->
 	    {error, Descr}
     end.
 
-%% Creates a new bucket. Not every string is an acceptable bucket name. 
+%% Creates a new bucket. Not every string is an acceptable bucket name.
 %% See http://docs.amazonwebservices.com/AmazonS3/2006-03-01/UsingBucket.html
 %% for information on bucket naming restrictions.
-%% 
+%%
 %% Spec: create_bucket(Bucket::string()) ->
 %%       {ok, Bucket::string()} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
 create_bucket(Bucket) ->
     try genericRequest(put, Bucket, "", [], [], [], <<>>) of
-	{ok, Headers, _Body} -> 
+	{ok, Headers, _Body} ->
 	    RequestId = case lists:keytake("x-amz-request-id", 1, Headers) of
 			{value, {_, ReqId}, _} -> ReqId;
 			_ -> "" end,
@@ -69,14 +69,14 @@ create_bucket(Bucket) ->
 	    {error, Descr}
     end.
 
-%% Creates a new bucket with a location constraint (EU). 
+%% Creates a new bucket with a location constraint (EU).
 %%
-%% *** Be aware that Amazon applies a different pricing for EU buckets *** 
+%% *** Be aware that Amazon applies a different pricing for EU buckets ***
 %%
-%% Not every string is an acceptable bucket name. 
+%% Not every string is an acceptable bucket name.
 %% See http://docs.amazonwebservices.com/AmazonS3/2006-03-01/UsingBucket.html
 %% for information on bucket naming restrictions.
-%% 
+%%
 %% Spec: create_bucket(Bucket::string(), eu) ->
 %%       {ok, Bucket::string()} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
@@ -105,8 +105,8 @@ create_bucket(Bucket, Region) ->
 	    {error, Descr}
     end.
 
-%% Deletes a bucket. 
-%% 
+%% Deletes a bucket.
+%%
 %% Spec: delete_bucket(Bucket::string()) ->
 %%       {ok} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
@@ -118,7 +118,7 @@ delete_bucket(Bucket) ->
 			{value, {_, ReqId}, _} -> ReqId;
 			_ -> "" end,
 		{ok, {requestId, RequestId}}
-    catch 
+    catch
 	throw:{error, Descr} ->
 	    {error, Descr}
     end.
@@ -136,7 +136,7 @@ list_contents(Bucket) ->
 
 %% Lists the contents of a bucket.
 %%
-%% Spec: list_contents(Bucket::string(), Options::[{atom(), 
+%% Spec: list_contents(Bucket::string(), Options::[{atom(),
 %%                     (integer() | string())}]) ->
 %%       {ok, #s3_list_result{isTruncated::boolean(),
 %%                         keys::[#s3_object_info{}],
@@ -149,22 +149,22 @@ list_contents(Bucket) ->
 list_contents(Bucket, Options) when is_list(Options) ->
     QueryParameters = [makeParam(X) || X <- Options],
     try genericRequest(get, Bucket, "", QueryParameters, [], [], <<>>) of
-	{ok, Headers, Body} -> 
+	{ok, Headers, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(binary_to_list(Body)),
-	    [Truncated| _Tail] = xmerl_xpath:string("//IsTruncated/text()", 
+	    [Truncated| _Tail] = xmerl_xpath:string("//IsTruncated/text()",
 						    XmlDoc),
 	    ContentNodes = xmerl_xpath:string("//Contents", XmlDoc),
 	    KeyList = [extractObjectInfo(Node) || Node <- ContentNodes],
-	    PrefixList = [Node#xmlText.value || 
+	    PrefixList = [Node#xmlText.value ||
 			     Node <- xmerl_xpath:string(?PREFIX_XPATH, XmlDoc)],
 		RequestId = case lists:keytake(?S3_REQ_ID_HEADER, 1, Headers) of
 			{value, {_, ReqId}, _} -> ReqId;
-			_ -> "" end,			
+			_ -> "" end,
 	    {ok, #s3_list_result{isTruncated=case Truncated#xmlText.value of
 					      "true" -> true;
-					      _ -> false end, 
+					      _ -> false end,
 			      keys=KeyList, prefixes=PrefixList}, {requestId, RequestId}}
-    catch 
+    catch
 	throw:{error, Descr} ->
 	    {error, Descr}
     end.
@@ -172,7 +172,7 @@ list_contents(Bucket, Options) when is_list(Options) ->
 %% Uploads data for key. Backwards-compatible version.
 %%
 %% Spec: put_object(Bucket::string(), Key::string(), Data::binary(),
-%%                  ContentType::string(), 
+%%                  ContentType::string(),
 %%                  Metadata::[{Key::string(), Value::string()}]) ->
 %%       {ok, #s3_object_info(key=Key::string(), size=Size::integer())} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
@@ -195,7 +195,7 @@ put_object(Bucket, Key, Data, ContentType, Metadata) when is_integer(hd(ContentT
 %%
 put_object(Bucket, Key, Data, HTTPHeaders, Metadata) ->
     try genericRequest(put, Bucket, Key, [], Metadata, HTTPHeaders, Data) of
-	{ok, Headers, _Body} -> 
+	{ok, Headers, _Body} ->
 	    {ok,
 	     #s3_object_info{key=Key, size=iolist_size(Data),
 			     etag=proplists:get_value("etag", Headers)},
@@ -288,7 +288,7 @@ upload_part(Bucket, Key, PartNum, UploadId, Data, HTTPHeaders) ->
 put_file(Bucket, Key, FileName, ContentType, Metadata) ->
     Date = httpd_util:rfc1123_date(erlang:localtime()),
     {FileSize, File} = openAndGetFileSize(FileName),
-    Headers = 
+    Headers =
         buildContentHeaders(FileSize) ++
 	buildMetadataHeaders(Metadata),
     Signature = sign(AWS_SEC_KEY,
@@ -299,28 +299,28 @@ put_file(Bucket, Key, FileName, ContentType, Metadata) ->
 		     {"Date", Date },
 		     {"Content-Type", ContentType}
 		     | Headers ],
-    Payload = 
+    Payload =
         lists:append(
           ["PUT /", Key, " HTTP/1.1\n",
-           lists:flatten([lists:append([K, ": ", V, "\n"]) || 
+           lists:flatten([lists:append([K, ": ", V, "\n"]) ||
                              {K, V} <- lists:reverse(FinalHeaders)]),
            "\n"]),
-    {ok, Socket} = gen_tcp:connect(?AWS_S3_HOST, 80, 
+    {ok, Socket} = gen_tcp:connect(?AWS_S3_HOST, 80,
                                    [binary, {active, false}, {packet, 0}]),
     gen_tcp:send(Socket, list_to_binary(Payload)),
     sendData(Socket, File),
     gen_tcp:close(Socket),
     file:close(File).
-       
+
 %% Retrieves the data associated with the given key.
-%% 
+%%
 %% Spec: get_object(Bucket::string(), Key::string()) ->
 %%       {ok, Data::binary()} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
 %%
 get_object(Bucket, Key) ->
     try genericRequest(get, Bucket, Key, [], [], [], <<>>) of
-	{ok, Headers, Body} -> 
+	{ok, Headers, Body} ->
 		RequestId = case lists:keytake(?S3_REQ_ID_HEADER, 1, Headers) of
 			{value, {_, ReqId}, _} -> ReqId;
 			_ -> "" end,
@@ -329,7 +329,7 @@ get_object(Bucket, Key) ->
 	throw:{error, Descr} ->
 	    {error, Descr}
     end.
-    
+
 %% Returns the metadata associated with the given key.
 %%
 %% Spec: info_object(Bucket::string(), Key::string()) ->
@@ -351,7 +351,7 @@ info_object(Bucket, Key) ->
     end.
 
 %% Delete the given key from bucket.
-%% 
+%%
 %% Spec: delete_object(Bucket::string(), Key::string()) ->
 %%       {ok} |
 %%       {error, {Code::string(), Msg::string(), ReqId::string()}}
@@ -386,10 +386,10 @@ mkHdr ({Key,Values}) ->
     Key ++ ":" ++ erlaws_util:mkEnumeration(Values,",").
 
 canonicalizeAmzHeaders( Headers ) ->
-    XAmzHeaders = [ {string:to_lower(Key),Value} || {Key,Value} <- Headers, 
+    XAmzHeaders = [ {string:to_lower(Key),Value} || {Key,Value} <- Headers,
 						    isAmzHeader(Key) ],
-    Strings = lists:map( 
-		fun mkHdr/1, 
+    Strings = lists:map(
+		fun mkHdr/1,
 		collapse(XAmzHeaders)),
     erlaws_util:mkEnumeration( [[String, "\n"] || String <- Strings], "").
 
@@ -401,13 +401,13 @@ canonicalizeResource ( Bucket, Path ) -> "/" ++ Bucket ++ "/" ++ Path.
 makeParam(X) ->
     case X of
 	{_, []} -> {};
-	{prefix, Prefix} -> 
+	{prefix, Prefix} ->
 	    {"prefix", Prefix};
-	{marker, Marker} -> 
+	{marker, Marker} ->
 	    {"marker", Marker};
-	{max_keys, MaxKeys} when is_integer(MaxKeys) -> 
+	{max_keys, MaxKeys} when is_integer(MaxKeys) ->
 	    {"max-keys", integer_to_list(MaxKeys)};
-	{delimiter, Delimiter} -> 
+	{delimiter, Delimiter} ->
 	    {"delimiter", Delimiter};
 	_ -> {}
     end.
@@ -419,7 +419,7 @@ buildHost(Bucket) ->
     Bucket ++ "." ++ ?AWS_S3_HOST.
 
 buildProtocol() ->
-	case SECURE of 
+	case SECURE of
 		true -> "https://";
 		_ -> "http://" end.
 
@@ -427,17 +427,17 @@ buildUrl("", "", []) ->
     buildProtocol() ++ ?AWS_S3_HOST ++ "/";
 buildUrl("", Path, []) ->
     buildProtocol() ++ ?AWS_S3_HOST ++ Path;
-buildUrl(Bucket,Path,QueryParams) -> 
-    buildProtocol() ++ Bucket ++ "." ++ ?AWS_S3_HOST ++ "/" ++ Path ++ 
+buildUrl(Bucket,Path,QueryParams) ->
+    buildProtocol() ++ Bucket ++ "." ++ ?AWS_S3_HOST ++ "/" ++ Path ++
 	erlaws_util:queryParams(QueryParams).
 
-buildContentHeaders(Contents) when is_integer(Contents) -> 
+buildContentHeaders(Contents) when is_integer(Contents) ->
     [{"Content-Length", integer_to_list(Contents)}];
 % Detect gzip header and put appropriate Content-Encoding. Questionable?..
-buildContentHeaders(<<16#1f, 16#8b, _/binary>> = Contents) -> 
+buildContentHeaders(<<16#1f, 16#8b, _/binary>> = Contents) ->
     [{"Content-Length", integer_to_list(iolist_size(Contents))},
      {"Content-Encoding", "gzip"}];
-buildContentHeaders(Contents) -> 
+buildContentHeaders(Contents) ->
     [{"Content-Length", integer_to_list(iolist_size(Contents))}].
 
 buildMetadataHeaders(Metadata) ->
@@ -451,11 +451,11 @@ buildContentMD5Header(ContentMD5) ->
 	_ -> [{"Content-MD5", ContentMD5}]
     end.
 
-stringToSign ( Verb, ContentMD5, ContentType, Date, Bucket, Path, 
+stringToSign ( Verb, ContentMD5, ContentType, Date, Bucket, Path,
 	       OriginalHeaders ) ->
-    Parts = [ Verb, ContentMD5, ContentType, Date, 
+    Parts = [ Verb, ContentMD5, ContentType, Date,
 	      canonicalizeAmzHeaders(OriginalHeaders)],
-    erlaws_util:mkEnumeration( Parts, "\n") ++ 
+    erlaws_util:mkEnumeration( Parts, "\n") ++
 	canonicalizeResource(Bucket, Path).
 
 sign (Key,Data) ->
@@ -466,7 +466,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
     genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 		    HTTPHeaders, Body, ?NR_OF_RETRIES).
 
-genericRequest( Method, Bucket, Path, QueryParams, Metadata, 
+genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 		HTTPHeaders, Body, NrOfRetries) ->
     Date = httpd_util:rfc1123_date(erlang:localtime()),
     MethodString = string:to_upper( atom_to_list(Method) ),
@@ -476,10 +476,10 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 		     0 -> "";
 		     _ -> binary_to_list(base64:encode(erlang:md5(Body)))
 		 end,
-    
+
     Headers =
         buildContentHeaders(Body) ++
-	buildMetadataHeaders(Metadata) ++ 
+	buildMetadataHeaders(Metadata) ++
 	buildContentMD5Header(ContentMD5) ++
 	HTTPHeaders,
 
@@ -487,7 +487,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 		[CT|_] -> CT;
 		[] -> ""
 	end,
-    
+
     {AccessKey, SecretAccessKey } = {AWS_KEY, AWS_SEC_KEY},
 
     Signature = sign(SecretAccessKey,
@@ -495,7 +495,7 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
 				  Bucket,
 				  Path ++ erlaws_util:queryParams(QueryParams),
 				  Headers )),
-    
+
     FinalHeaders = [ {"Authorization","AWS " ++ AccessKey ++ ":" ++ Signature },
 		     {"Host", buildHost(Bucket) },
 		     {"Date", Date },
@@ -513,49 +513,49 @@ genericRequest( Method, Bucket, Path, QueryParams, Metadata,
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
 
-    Reply = http:request( Method, Request, HttpOptions, Options ),
-    
+    Reply = httpc:request( Method, Request, HttpOptions, Options ),
+
     %%     {ok, {Status, ReplyHeaders, RBody}} = Reply,
-    %%     io:format("Response:~n ~p~n~p~n~p~n", [Status, ReplyHeaders, 
+    %%     io:format("Response:~n ~p~n~p~n~p~n", [Status, ReplyHeaders,
     %% 					   binary_to_list(RBody)]),
-    
+
     case Reply of
- 	{ok, {{_HttpVersion, Code, _ReasonPhrase}, ResponseHeaders, 
-	      ResponseBody }} when Code=:=200; Code=:=204 -> 
+ 	{ok, {{_HttpVersion, Code, _ReasonPhrase}, ResponseHeaders,
+	      ResponseBody }} when Code=:=200; Code=:=204 ->
  	    {ok, ResponseHeaders, ResponseBody};
 
-	{ok, {{_HttpVersion, Code, ReasonPhrase}, ResponseHeaders, 
+	{ok, {{_HttpVersion, Code, ReasonPhrase}, ResponseHeaders,
 	      _ResponseBody }} when Code=:=500, NrOfRetries == 0 ->
-	    throw ({error, {"500", ReasonPhrase, 
+	    throw ({error, {"500", ReasonPhrase,
 		    proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)}});
-	
-	{ok, {{_HttpVersion, Code, _ReasonPhrase}, _ResponseHeaders, 
+
+	{ok, {{_HttpVersion, Code, _ReasonPhrase}, _ResponseHeaders,
 	      _ResponseBody }} when Code=:=500 ->
 	    timer:sleep((?NR_OF_RETRIES-NrOfRetries)*500),
-	    genericRequest(Method, Bucket, Path, QueryParams, 
+	    genericRequest(Method, Bucket, Path, QueryParams,
 			   Metadata, HTTPHeaders, Body, NrOfRetries-1);
-	
- 	{ok, {{_HttpVersion, HttpCode, ReasonPhrase}, ResponseHeaders, 
+
+ 	{ok, {{_HttpVersion, HttpCode, ReasonPhrase}, ResponseHeaders,
 	      ResponseBody }} ->
 	    throw (try mkErr(ResponseBody, ResponseHeaders) of
 		      {error, Reason} -> {error, Reason}
 		  catch
 		      exit:_Error ->
-			  {error, {integer_to_list(HttpCode), ReasonPhrase, 
+			  {error, {integer_to_list(HttpCode), ReasonPhrase,
 			   proplists:get_value(?S3_REQ_ID_HEADER, ResponseHeaders)}}
 		  end)
     end.
 
 mkErr (Xml, Headers) ->
     {XmlDoc, _Rest} = xmerl_scan:string( binary_to_list(Xml) ),
-    [#xmlText{value=ErrorCode}|_] = 
+    [#xmlText{value=ErrorCode}|_] =
 	xmerl_xpath:string("/Error/Code/text()", XmlDoc),
-    [#xmlText{value=ErrorMessage}|_] = 
+    [#xmlText{value=ErrorMessage}|_] =
 	xmerl_xpath:string("/Error/Message/text()", XmlDoc),
-    {error, {ErrorCode, ErrorMessage, 
+    {error, {ErrorCode, ErrorMessage,
 	     proplists:get_value(?S3_REQ_ID_HEADER, Headers)}}.
 
-extractObjectInfo (Node) -> 
+extractObjectInfo (Node) ->
     [Key|_] = xmerl_xpath:string("./Key/text()", Node),
     [ETag|_] = xmerl_xpath:string("./ETag/text()", Node),
     [LastModified|_] = xmerl_xpath:string("./LastModified/text()", Node),

@@ -9,8 +9,8 @@
 
 %% exports
 -export([list_queues/0, list_queues/1, get_queue_url/1, create_queue/1,
-	 create_queue/2, get_queue_attr/1, set_queue_attr/3, 
-	 delete_queue/1, send_message/2, 
+	 create_queue/2, get_queue_attr/1, set_queue_attr/3,
+	 delete_queue/1, send_message/2,
 	 receive_message/1, receive_message/2, receive_message/3,
 	 delete_message/2]).
 
@@ -24,21 +24,21 @@
 
 %% queues
 
-%% Creates a new SQS queue with the given name. 
+%% Creates a new SQS queue with the given name.
 %%
-%% SQS assigns the queue a queue URL; you must use this URL when 
-%% performing actions on the queue (for more information, see 
+%% SQS assigns the queue a queue URL; you must use this URL when
+%% performing actions on the queue (for more information, see
 %% http://docs.amazonwebservices.com/AWSSimpleQueueService/2007-05-01/SQSDeveloperGuide/QueueURL.html).
 %%
 %% Spec: create_queue(QueueName::string()) ->
 %%       {ok, QueueUrl::string(), {requestId, RequestId::string()}} |
 %%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}}
-%% 
+%%
 create_queue(QueueName) ->
     try query_request("CreateQueue", [{"QueueName", QueueName}]) of
 	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
-	    [#xmlText{value=QueueUrl}|_] = 
+	    [#xmlText{value=QueueUrl}|_] =
 			xmerl_xpath:string("//QueueUrl/text()", XmlDoc),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
@@ -49,17 +49,17 @@ create_queue(QueueName) ->
     end.
 
 %% Creates a new SQS queue with the given name and default VisibilityTimeout.
-%% 
+%%
 %% Spec: create_queue(QueueName::string(), VisibilityTimeout::integer()) ->
 %%       {ok, QueueUrl::string(), {requestId, ReqId::string()}} |
 %%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}}
-%% 
+%%
 create_queue(QueueName, VisibilityTimeout) when is_integer(VisibilityTimeout) ->
-    try query_request("CreateQueue", [{"QueueName", QueueName}, 
+    try query_request("CreateQueue", [{"QueueName", QueueName},
 		    {"DefaultVisibilityTimeout", integer_to_list(VisibilityTimeout)}]) of
 	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
-	    [#xmlText{value=QueueUrl}|_] = 
+	    [#xmlText{value=QueueUrl}|_] =
 			xmerl_xpath:string("//QueueUrl/text()", XmlDoc),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
@@ -68,7 +68,7 @@ create_queue(QueueName, VisibilityTimeout) when is_integer(VisibilityTimeout) ->
 		throw:{error, Descr, Err} ->
 	    	{error, Descr, Err}
     end.
-	
+
 
 %% Returns a list of existing queues (QueueUrls).
 %%
@@ -110,7 +110,7 @@ list_queues(Prefix) ->
 		throw:{error, Descr, Err} ->
 	    	{error, Descr, Err}
     end.
-    
+
 %% Returns the Url for a specific queue-name
 %%
 %% Spec: get_queue(QueueName::string()) ->
@@ -121,7 +121,7 @@ list_queues(Prefix) ->
 get_queue_url(QueueName) ->
     try query_request("ListQueues", [{"QueueNamePrefix", QueueName}]) of
 	{ok, Body} ->
-	    {XmlDoc, _Rest} = xmerl_scan:string(Body),	    
+	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
 	    QueueNodes = xmerl_xpath:string("//QueueUrl/text()", XmlDoc),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
@@ -147,15 +147,15 @@ get_queue_url(QueueName) ->
 %%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}}
 %%
 get_queue_attr(QueueUrl) ->
-    try query_request(QueueUrl, "GetQueueAttributes",  
+    try query_request(QueueUrl, "GetQueueAttributes",
 		       [{"AttributeName", "All"}]) of
-	{ok, Body} -> 
+	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
 	    AttributeNodes = xmerl_xpath:string("//Attribute", XmlDoc),
-	    AttrList = [{Key, 
-			 list_to_integer(Value)} || Node <- AttributeNodes,  
+	    AttrList = [{Key,
+			 list_to_integer(Value)} || Node <- AttributeNodes,
 			begin
-			    [#xmlText{value=Key}|_] = 
+			    [#xmlText{value=Key}|_] =
 				xmerl_xpath:string("./Name/text()", Node),
 			    [#xmlText{value=Value}|_] =
 				xmerl_xpath:string("./Value/text()", Node),
@@ -172,17 +172,17 @@ get_queue_attr(QueueUrl) ->
 %% This function allows you to alter the default VisibilityTimeout for
 %% a given QueueUrl
 %%
-%% Spec: set_queue_attr(visibility_timeout, QueueUrl::string(), 
+%% Spec: set_queue_attr(visibility_timeout, QueueUrl::string(),
 %%                      Timeout::integer()) ->
 %%       {ok, {requestId, ReqId::string()}} |
 %%       {error, {HTTPStatus::string, HTTPReason::string()}, {Code::string(), Message::string(), {requestId, ReqId::string()}}}
 %%
-set_queue_attr(visibility_timeout, QueueUrl, Timeout) 
+set_queue_attr(visibility_timeout, QueueUrl, Timeout)
   when is_integer(Timeout) ->
-    try query_request(QueueUrl, "SetQueueAttributes", 
+    try query_request(QueueUrl, "SetQueueAttributes",
 		       [{"Attribute.Name", "VisibilityTimeout"},
 			{"Attribute.Value", integer_to_list(Timeout)}]) of
-	{ok, Body} -> 
+	{ok, Body} ->
 		{XmlDoc, _Rest} = xmerl_scan:string(Body),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
@@ -200,7 +200,7 @@ set_queue_attr(visibility_timeout, QueueUrl, Timeout)
 %%
 delete_queue(QueueUrl) ->
     try query_request(QueueUrl, "DeleteQueue", []) of
-	{ok, Body} -> 
+	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
 		[#xmlText{value=RequestId}|_] =
 			xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
@@ -221,11 +221,11 @@ delete_queue(QueueUrl) ->
 %%
 send_message(QueueUrl, Message) ->
     try query_request(QueueUrl, "SendMessage", [{"MessageBody", Message}]) of
-	{ok, Body} -> 
+	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
-	    [#xmlText{value=MessageId}|_] = 
+	    [#xmlText{value=MessageId}|_] =
 		xmerl_xpath:string("//MessageId/text()", XmlDoc),
-		[#xmlText{value=ContentMD5}|_] = 
+		[#xmlText{value=ContentMD5}|_] =
 			xmerl_xpath:string("//MD5OfMessageBody/text()", XmlDoc),
 		[#xmlText{value=RequestId}|_] = xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, #sqs_message{messageId=MessageId, contentMD5=ContentMD5, body=Message}, {requestId, RequestId}}
@@ -267,11 +267,11 @@ receive_message(QueueUrl, NrOfMessages, VisibilityTimeout) when is_integer(NrOfM
 	VisibilityTimeoutParam = case VisibilityTimeout of
 		"" -> [];
 		_ -> [{"VisibilityTimeout", integer_to_list(VisibilityTimeout)}] end,
-    try query_request(QueueUrl, "ReceiveMessage", 
+    try query_request(QueueUrl, "ReceiveMessage",
 		     [{"MaxNumberOfMessages", integer_to_list(NrOfMessages)}] ++ VisibilityTimeoutParam) of
 	{ok, Body} ->
 	    {XmlDoc, _Rest} = xmerl_scan:string(Body),
-		[#xmlText{value=RequestId}|_] = 
+		[#xmlText{value=RequestId}|_] =
 		  xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    MessageNodes = xmerl_xpath:string("//Message", XmlDoc),
 	    {ok, [#sqs_message{messageId=MsgId, receiptHandle=ReceiptHandle, contentMD5=ContentMD5, body=MsgBody}  || Node <- MessageNodes,
@@ -302,7 +302,7 @@ delete_message(QueueUrl, ReceiptHandle) ->
 		      [{"ReceiptHandle", ReceiptHandle}]) of
 	{ok, Body} ->
 		{XmlDoc, _Rest} = xmerl_scan:string(Body),
-		[#xmlText{value=RequestId}|_] = 
+		[#xmlText{value=RequestId}|_] =
 		  xmerl_xpath:string("//ResponseMetadata/RequestId/text()", XmlDoc),
 	    {ok, {requestId, RequestId}}
     catch
@@ -321,7 +321,7 @@ query_request(Action, Parameters) ->
 		SECURE -> Prefix = "https://";
 		true -> Prefix = "http://"
 	end,
-	
+
 	query_request(Prefix ++ ?AWS_SQS_HOST ++ "/", Action, Parameters).
 
 query_request(Url, Action, Parameters) when ?USE_SIGNATURE_V1 ->
@@ -354,16 +354,16 @@ mkReq(Url, Params) ->
     Options = [{sync,true}, {body_format, binary}],
     {ok, {Status, _ReplyHeaders, Body}} =
 	httpc:request(post, Request, HttpOptions, Options),
-    case Status of 
+    case Status of
 	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 	{_, _, _} -> {error, Status, binary_to_list(Body)}
     end.
 
 mkErr(Xml) ->
     {XmlDoc, _Rest} = xmerl_scan:string( Xml ),
-    [#xmlText{value=ErrorCode}|_] = xmerl_xpath:string("//Error/Code/text()", 
+    [#xmlText{value=ErrorCode}|_] = xmerl_xpath:string("//Error/Code/text()",
 						       XmlDoc),
-    ErrorMessage = 
+    ErrorMessage =
 	case xmerl_xpath:string("//Error/Message/text()", XmlDoc) of
 	    [] -> "";
 	    [EMsg|_] -> EMsg#xmlText.value
@@ -388,10 +388,10 @@ query_requestV1(Url, Action, Parameters) ->
     Timestamp = lists:flatten(erlaws_util:get_timestamp()),
 	SignParams = [{"Action", Action}, {"AWSAccessKeyId", AWS_KEY}, {"Timestamp", Timestamp}] ++
 				 Parameters ++ [{"SignatureVersion", "1"}, {"Version", ?AWS_SQS_VERSION}],
-	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
+	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) ->
 		{KeyA, _} = A,
 		{KeyB, _} = B,
-		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
+		string:to_lower(KeyA) =< string:to_lower(KeyB) end,
 		SignParams)], ""),
 	%% io:format("StringToSign: ~p~n", [StringToSign]),
     Signature = sign(AWS_SEC_KEY, StringToSign),
@@ -407,7 +407,7 @@ query_requestV1(Url, Action, Parameters) ->
     end.
 
 mkReqV1(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
-    %%%% io:format("QueryParams:~n ~p~nHeaders:~n ~p~nUrl:~n ~p~n", 
+    %%%% io:format("QueryParams:~n ~p~nHeaders:~n ~p~nUrl:~n ~p~n",
     %%      [QueryParams, Headers, PreUrl]),
     Url = PreUrl ++ erlaws_util:queryParams( QueryParams ),
     %% io:format("RequestUrl:~n ~p~n", [Url]),
@@ -418,11 +418,11 @@ mkReqV1(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
 
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
-    {ok, {Status, _ReplyHeaders, Body}} = 
-	http:request(Method, Request, HttpOptions, Options),
+    {ok, {Status, _ReplyHeaders, Body}} =
+	httpc:request(Method, Request, HttpOptions, Options),
     %% io:format("Response:~n ~p~n", [binary_to_list(Body)]),
 	%% io:format("Status: ~p~n", [Status]),
-    case Status of 
+    case Status of
 	{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 	{_, _, _} -> {error, Status, binary_to_list(Body)}
     end.

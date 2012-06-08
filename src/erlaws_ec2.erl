@@ -7,7 +7,7 @@
 
 -define (AWS_EC2_HOST, "ec2.amazonaws.com").
 -define	(AWS_EC2_VERSION, "2009-11-30").
-	
+
 % API
 describe_instances() ->
 	describe_instances([]).
@@ -29,7 +29,7 @@ describe_instances(InstanceIds) ->
 							[#xmlText{value = DnsName} | _] = xmerl_xpath:string("//dnsName/text()", Item),
 							[#xmlText{value = Type} | _] = xmerl_xpath:string("//instanceType/text()", Item),
 							Items ++ [{InstanceId, InstenceState, PrivateDnsName, DnsName, Type}]
-						end, 
+						end,
 					[], xmerl_xpath:string("//instancesSet/item", Elem)),
 					ACC ++ [{ReservationId, InstanseSet}]
 				end,
@@ -96,7 +96,7 @@ start_instances(InstanceIds) ->
 		    {error, Descr}
 	end.
 
-%InstanceType	Valid Values: m1.small | m1.large | m1.xlarge | c1.medium | c1.xlarge | m2.xlarge | m2.2xlarge | m2.4xlarge	
+%InstanceType	Valid Values: m1.small | m1.large | m1.xlarge | c1.medium | c1.xlarge | m2.xlarge | m2.2xlarge | m2.4xlarge
 run_instances(ImageId, MinCount, MaxCount, KeyName, SecurityGroups, AddressingType, InstanceType,
 							KernelId, RamdiskId, Monitoring, SubnetId, DisableApiTermination, InstanceInitiatedShutdownBehavior) ->
 	Fun = fun(Group, [Inc, List]) -> [Inc + 1, lists:append(List, [{lists:flatten(io_lib:format("SecurityGroup.~p", [Inc])), Group}])] end,
@@ -120,12 +120,12 @@ run_instances(ImageId, MinCount, MaxCount, KeyName, SecurityGroups, AddressingTy
 		throw:{error, Descr} ->
 		    {error, Descr}
 	end.
-	
+
 sign (Key,Data) ->
     binary_to_list( base64:encode( crypto:sha_mac(Key,Data) ) ).
 
 query_request(Action, Parameters) ->
-	case SECURE of 
+	case SECURE of
 			true -> Prefix = "https://";
 			_ -> Prefix = "http://"
 	end,
@@ -135,10 +135,10 @@ query_request(Url, Action, Parameters) ->
     Timestamp = lists:flatten(erlaws_util:get_timestamp()),
 	SignParams = [{"Action", Action}, {"AWSAccessKeyId", AWS_KEY}, {"Timestamp", Timestamp}] ++
 				 Parameters ++ [{"SignatureVersion", "1"}, {"Version", ?AWS_EC2_VERSION}],
-	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) -> 
+	StringToSign = erlaws_util:mkEnumeration([Param++Value || {Param, Value} <- lists:sort(fun (A, B) ->
 		{KeyA, _} = A,
 		{KeyB, _} = B,
-		string:to_lower(KeyA) =< string:to_lower(KeyB) end, 
+		string:to_lower(KeyA) =< string:to_lower(KeyB) end,
 		SignParams)], ""),
     Signature = sign(AWS_SEC_KEY, StringToSign),
     FinalQueryParams = SignParams ++
@@ -160,16 +160,16 @@ mkReq(Method, PreUrl, Headers, QueryParams, ContentType, ReqBody) ->
 
     HttpOptions = [{autoredirect, true}],
     Options = [ {sync,true}, {headers_as_is,true}, {body_format, binary} ],
-    {ok, {Status, _ReplyHeaders, Body}} = http:request(Method, Request, HttpOptions, Options),
-    case Status of 
+    {ok, {Status, _ReplyHeaders, Body}} = httpc:request(Method, Request, HttpOptions, Options),
+    case Status of
 		{_, 200, _} -> {ok, Status, binary_to_list(Body)};
 		{_, _, _} -> {error, Status, binary_to_list(Body)}
-    end.	
+    end.
 
 mkErr(Xml) ->
     {XmlDoc, _Rest} = xmerl_scan:string( Xml ),
     [#xmlText{value=ErrorCode}|_] = xmerl_xpath:string("//Error/Code/text()", XmlDoc),
-    ErrorMessage = 
+    ErrorMessage =
 	case xmerl_xpath:string("//Error/Message/text()", XmlDoc) of
 	    [] -> "";
 	    [EMsg|_] -> EMsg#xmlText.value
