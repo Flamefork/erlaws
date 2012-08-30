@@ -17,24 +17,23 @@ describe_instances(InstanceIds) ->
 	[_, Params] = lists:foldl(Fun, [1, []], InstanceIds),
 	try query_request("DescribeInstances", Params) of
 		{ok, Body} ->
-			{ResponseXML, _Rest} = xmerl_scan:string(Body),
-			Response = lists:foldl(
-				fun(Elem, ACC) ->
-					[#xmlText{value = ReservationId} | _] = xmerl_xpath:string("//reservationId/text()", Elem),
-					InstanseSet = lists:foldl(
-						fun(Item, Items) ->
-							[#xmlText{value = InstanceId} | _] = xmerl_xpath:string("//instanceId/text()", Item),
-							[#xmlText{value = InstenceState} | _] = xmerl_xpath:string("//instanceState/name/text()", Item),
-							[#xmlText{value = PrivateDnsName} | _] = xmerl_xpath:string("//privateDnsName/text()", Item),
-							[#xmlText{value = DnsName} | _] = xmerl_xpath:string("//dnsName/text()", Item),
-							[#xmlText{value = Type} | _] = xmerl_xpath:string("//instanceType/text()", Item),
-							Items ++ [{InstanceId, InstenceState, PrivateDnsName, DnsName, Type}]
-						end,
-					[], xmerl_xpath:string("//instancesSet/item", Elem)),
-					ACC ++ [{ReservationId, InstanseSet}]
-				end,
-			[], xmerl_xpath:string("//DescribeInstancesResponse/reservationSet/item", ResponseXML)),
-			Response
+      XpathFields = [
+          {instance_id,       "instanceId"},
+          {instance_state,    "instanceState/name"},
+          {instance_type,     "instanceType"},
+          {dns_name,          "dnsName"},
+          {private_dns_name,  "privateDnsName"},
+          {availability_zone, "placement/availabilityZone"}],
+      {ResponseXML, _Rest} = xmerl_scan:string(Body),
+      lists:map(fun(Item) ->
+        lists:map(fun({Key, Path}) ->
+          Value = case xmerl_xpath:string("//" ++ Path ++ "/text()", Item) of
+            [] -> "";
+            [#xmlText{value = V} | _] -> V
+          end,
+          {Key, Value}
+        end, XpathFields)
+      end, xmerl_xpath:string("//DescribeInstancesResponse/reservationSet/item/instancesSet/item", ResponseXML))
 	catch
 		throw:{error, Descr} ->
 		    {error, Descr}
